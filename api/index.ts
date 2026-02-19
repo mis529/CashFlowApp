@@ -8,6 +8,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 // API routes
 app.get("/api/config", (req, res) => {
   res.json({
@@ -30,6 +35,11 @@ async function setupServer() {
     const distPath = path.join(__dirname, "..", "dist");
     app.use(express.static(distPath));
   }
+
+  const PORT = 3000;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 }
 
 setupServer();
