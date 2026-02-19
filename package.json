@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx api/index.ts",
     "build": "vite build",
-    "lint": "tsc --noEmit",
+    "lint": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -24,6 +24,8 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0"
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   }
 }

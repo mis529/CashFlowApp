@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, Party } from './types';
+import { Transaction, Party, TransactionType } from './types';
 import { getFinancialInsights } from './services/geminiService';
 import { 
   PlusIcon, 
@@ -45,7 +45,7 @@ const App: React.FC = () => {
     from: 'Abhishek',
     to: '', // Changed to empty string for text input
     amount: '',
-    type: 'GIVE' as const,
+    type: 'GIVE' as TransactionType,
     note: ''
   });
 
