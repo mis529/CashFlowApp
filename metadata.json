@@ -1,0 +1,5 @@
+{
+  "name": "CashFlow Pro - Shared Ledger",
+  "description": "A modern cash flow management tool for tracking 'Give' and 'Take' transactions between parties. Features include balance summaries, transaction history, and AI-powered financial insights.",
+  "requestFramePermissions": []
+}
