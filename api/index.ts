@@ -20,28 +20,35 @@ app.get("/api/config", (req, res) => {
   });
 });
 
-async function setupServer() {
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+// Server setup logic
+if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  // Development mode with Vite middleware
+  const startDev = async () => {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    // Production static serving
-    // Note: On Vercel, static files are served by Vercel itself, 
-    // but this keeps local production previews working.
-    const distPath = path.join(__dirname, "..", "dist");
-    app.use(express.static(distPath));
-  }
-
+    
+    const PORT = 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  };
+  startDev();
+} else if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
+  // Local production preview
+  const distPath = path.join(__dirname, "..", "dist");
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+  
   const PORT = 3000;
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
-
-setupServer();
 
 export default app;
