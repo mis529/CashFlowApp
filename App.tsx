@@ -92,13 +92,24 @@ const App: React.FC = () => {
 
     setIsFetching(true);
     try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch');
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
-        // Sort by date descending
-        const sorted = data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Ensure every transaction has an ID and valid date
+        const processed = data.map((tx, idx) => ({
+          ...tx,
+          id: tx.id || `sheet-${idx}-${Date.now()}`,
+          amount: parseFloat(tx.amount) || 0,
+          date: tx.date || new Date().toISOString()
+        }));
+        const sorted = processed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setTransactions(sorted);
+      } else {
+        console.warn("Received non-array data from sheet:", data);
       }
     } catch (error) {
       console.error("Fetch Error:", error);
@@ -180,14 +191,19 @@ const App: React.FC = () => {
     if (googleSheetUrl) {
       setIsSyncing(true);
       try {
-        const response = await fetch(googleSheetUrl, {
+        // We use mode: 'no-cors' to avoid preflight issues with Apps Script,
+        // but we send as text/plain to ensure it's accepted as a simple request.
+        await fetch(googleSheetUrl, {
           method: 'POST',
-          mode: 'no-cors', // Apps Script requires no-cors if not using specialized headers
-          headers: { 'Content-Type': 'application/json' },
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(newTx)
         });
+        
+        // Since no-cors gives an opaque response, we assume success if no network error
         setSyncStatus('success');
-        await fetchFromSheet(); // Refresh after sync
+        // Wait a bit for the sheet to process before refreshing
+        setTimeout(() => fetchFromSheet(), 1500);
         setTimeout(() => setSyncStatus('idle'), 3000);
       } catch (error) {
         console.error("Sync Error:", error);
@@ -409,8 +425,8 @@ const App: React.FC = () => {
                       contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                     />
                     <Bar dataKey="balance" radius={[6, 6, 0, 0]}>
-                      {balances.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.balance >= 0 ? '#10b981' : '#f43f5e'} />
+                      {balances.map((entry) => (
+                        <Cell key={entry.name} fill={entry.balance >= 0 ? '#10b981' : '#f43f5e'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -480,8 +496,8 @@ const App: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    transactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-slate-50/80 transition group">
+                    transactions.map((tx, idx) => (
+                      <tr key={tx.id || `tx-${idx}`} className="hover:bg-slate-50/80 transition group">
                         <td className="px-6 py-5 whitespace-nowrap">
                           <div className="text-sm font-bold text-slate-700">
                             {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
