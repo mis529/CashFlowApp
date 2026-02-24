@@ -12,7 +12,8 @@ import {
   TrashIcon,
   SparklesIcon,
   CheckCircleIcon,
-  ExclamationCircleIcon
+  ExclamationCircleIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline';
 import { 
   BarChart, 
@@ -60,21 +61,37 @@ const App: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   // Fetch from Sheet
-  const fetchFromSheet = React.useCallback(async (urlOverride?: string) => {
-    const url = urlOverride || googleSheetUrl;
+  const fetchFromSheet = React.useCallback(async (urlOverride?: string, isManual = false) => {
+    const url = (urlOverride || googleSheetUrl)?.trim();
     if (!url) return;
+
+    // Basic validation to check if it's a Google Script Web App URL
+    if (!url.includes('script.google.com/macros/s/')) {
+      console.warn("URL does not look like a Google Apps Script Web App URL. Ensure you deployed as a Web App.");
+    }
 
     setIsFetching(true);
     try {
+      // Validate URL
+      let fetchUrl: URL;
+      try {
+        fetchUrl = new URL(url);
+      } catch (e) {
+        console.error("Invalid Google Sheet URL:", url);
+        if (isManual) setSyncStatus('error');
+        return;
+      }
+
       // Add cache-busting parameter
-      const fetchUrl = new URL(url);
       fetchUrl.searchParams.set('_t', Date.now().toString());
 
       const response = await fetch(fetchUrl.toString(), {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
+      
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
       const data = await response.json();
       if (Array.isArray(data)) {
         // Ensure every transaction has an ID and valid date
@@ -87,11 +104,17 @@ const App: React.FC = () => {
         const sorted = processed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setTransactions(sorted);
         setLastUpdated(new Date());
+        if (isManual) {
+          setSyncStatus('success');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+        }
       } else {
         console.warn("Received non-array data from sheet:", data);
+        if (data.error) throw new Error(data.error);
       }
     } catch (error) {
       console.error("Fetch Error:", error);
+      if (isManual) setSyncStatus('error');
     } finally {
       setIsFetching(false);
     }
@@ -116,22 +139,27 @@ const App: React.FC = () => {
     const fetchConfig = async () => {
       try {
         const response = await fetch('/api/config');
+        if (!response.ok) throw new Error('Failed to fetch config');
         const data = await response.json();
         if (data.gsheetUrl) {
-          setGoogleSheetUrl(data.gsheetUrl);
-          // Trigger initial fetch with the new URL
-          fetchFromSheet(data.gsheetUrl);
+          const trimmedUrl = data.gsheetUrl.trim();
+          setGoogleSheetUrl(trimmedUrl);
+          // Initial fetch will be triggered by the googleSheetUrl useEffect
         }
       } catch (error) {
         console.error("Config Fetch Error:", error);
       }
     };
     fetchConfig();
-  }, [fetchFromSheet]);
+  }, []); // Run only once on mount
 
-  // Auto-refresh every 20 seconds
+  // Auto-refresh and Initial Fetch
   useEffect(() => {
     if (!googleSheetUrl) return;
+    
+    // Initial fetch
+    fetchFromSheet();
+
     const interval = setInterval(() => {
       fetchFromSheet();
     }, 20000);
@@ -255,10 +283,15 @@ const App: React.FC = () => {
     // Actual Google Sheet Sync
     if (googleSheetUrl) {
       setIsSyncing(true);
+      setSyncStatus('idle');
       try {
+        const url = googleSheetUrl.trim();
+        // Validate URL
+        new URL(url);
+
         // We use mode: 'no-cors' to avoid preflight issues with Apps Script,
         // but we send as text/plain to ensure it's accepted as a simple request.
-        await fetch(googleSheetUrl, {
+        await fetch(url, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
@@ -268,12 +301,12 @@ const App: React.FC = () => {
         // Since no-cors gives an opaque response, we assume success if no network error
         setSyncStatus('success');
         // Wait a bit for the sheet to process before refreshing
-        setTimeout(() => fetchFromSheet(), 1500);
-        setTimeout(() => setSyncStatus('idle'), 3000);
+        setTimeout(() => fetchFromSheet(undefined, false), 2000);
+        setTimeout(() => setSyncStatus('idle'), 4000);
       } catch (error) {
         console.error("Sync Error:", error);
         setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 3000);
+        setTimeout(() => setSyncStatus('idle'), 5000);
       } finally {
         setIsSyncing(false);
       }
@@ -325,7 +358,7 @@ const App: React.FC = () => {
               <DocumentArrowDownIcon className="h-5 w-5" />
             </button>
             <button 
-              onClick={() => fetchFromSheet()}
+              onClick={() => fetchFromSheet(undefined, true)}
               disabled={isFetching || !googleSheetUrl}
               className={`p-2 rounded-full transition relative ${isFetching ? 'text-amber-500' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
               title="Refresh from Sheet"
@@ -481,6 +514,32 @@ const App: React.FC = () => {
                   {p.name}
                 </span>
               ))}
+            </div>
+          </section>
+
+          {/* Connection Info */}
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
+              <LinkIcon className="h-4 w-4 mr-2" />
+              Sync Status
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Google Sheet</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${googleSheetUrl ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                  {googleSheetUrl ? 'Connected' : 'Missing URL'}
+                </span>
+              </div>
+              {googleSheetUrl && (
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <p className="text-[9px] text-slate-400 font-mono break-all line-clamp-2">
+                    {googleSheetUrl}
+                  </p>
+                </div>
+              )}
+              <p className="text-[10px] text-slate-400 leading-relaxed italic">
+                Tip: If data isn't posting, ensure your Google Script is deployed as a "Web App" with access set to "Anyone".
+              </p>
             </div>
           </section>
         </div>
