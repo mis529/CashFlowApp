@@ -24,6 +24,9 @@ export const getFinancialInsights = async (transactions: Transaction[], parties:
       Analyze the following cash flow transactions between parties: ${parties.join(", ")}.
       Transactions: ${JSON.stringify(transactions)}
       
+      Note: 'CREDIT' (+) means money flowed INTO the sender's account (Sender balance increases, Recipient balance decreases). 
+      'DEBIT' (-) means money flowed OUT of the sender's account (Sender balance decreases, Recipient balance increases).
+      
       Provide a concise summary of the financial relationship, identify who owes the most, 
       and give one piece of friendly financial advice.
     `;

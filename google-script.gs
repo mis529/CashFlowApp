@@ -15,8 +15,8 @@ function doPost(e) {
     
     // Check if headers exist, if not, create them
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Date", "From", "To", "Type", "Amount", "Note", "ID"]);
-      sheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#f3f4f6");
+      sheet.appendRow(["Date", "From", "To", "Type", "Amount", "PaymentMethod", "Note", "ID"]);
+      sheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#f3f4f6");
     }
 
     sheet.appendRow([
@@ -25,6 +25,7 @@ function doPost(e) {
       data.to,
       data.type,
       data.amount,
+      data.paymentMethod || "GENERAL",
       data.note || "",
       data.id
     ]);
@@ -51,9 +52,12 @@ function doGet(e) {
     const transactions = rows.slice(1).map(row => {
       const obj = {};
       headers.forEach((header, index) => {
-        const key = header.toLowerCase();
+        // Map headers to camelCase keys used in the app
+        let key = header.toString().trim();
+        if (key === "PaymentMethod") key = "paymentMethod";
+        else key = key.charAt(0).toLowerCase() + key.slice(1);
+        
         let value = row[index];
-        // Handle date conversion if necessary
         if (key === 'date' && value instanceof Date) {
           value = value.toISOString();
         }

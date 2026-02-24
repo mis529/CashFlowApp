@@ -1,5 +1,6 @@
 
-export type TransactionType = 'GIVE' | 'TAKE';
+export type TransactionType = 'CREDIT' | 'DEBIT';
+export type PaymentMethod = 'CASH' | 'BANK' | 'GENERAL';
 
 export interface Transaction {
   id: string;
@@ -7,6 +8,7 @@ export interface Transaction {
   to: string;
   amount: number;
   type: TransactionType;
+  paymentMethod: PaymentMethod;
   date: string;
   note: string;
 }

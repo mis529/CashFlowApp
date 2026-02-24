@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, Party, TransactionType } from './types';
+import { Transaction, Party, TransactionType, PaymentMethod } from './types';
 import { getFinancialInsights } from './services/geminiService';
 import { 
   PlusIcon, 
@@ -43,9 +43,10 @@ const App: React.FC = () => {
   const [newPartyName, setNewPartyName] = useState('');
   const [formData, setFormData] = useState({
     from: 'Abhishek',
-    to: '', // Changed to empty string for text input
+    to: '', 
     amount: '',
-    type: 'GIVE' as TransactionType,
+    type: 'CREDIT' as TransactionType,
+    paymentMethod: 'GENERAL' as PaymentMethod,
     note: ''
   });
 
@@ -129,12 +130,12 @@ const App: React.FC = () => {
     });
 
     transactions.forEach(t => {
-      if (t.type === 'GIVE') {
-        stats[t.from] -= t.amount;
-        stats[t.to] += t.amount;
-      } else {
+      if (t.type === 'CREDIT') {
         stats[t.from] += t.amount;
         stats[t.to] -= t.amount;
+      } else {
+        stats[t.from] -= t.amount;
+        stats[t.to] += t.amount;
       }
     });
 
@@ -162,12 +163,18 @@ const App: React.FC = () => {
       to: toName,
       amount,
       type: formData.type,
+      paymentMethod: formData.paymentMethod,
       date: new Date().toISOString(),
       note: formData.note
     };
 
+    // Auto-add new party if it doesn't exist
+    if (!parties.find(p => p.name.toLowerCase() === toName.toLowerCase())) {
+      setParties(prev => [...prev, { id: Date.now().toString(), name: toName }]);
+    }
+
     setTransactions([newTx, ...transactions]);
-    setFormData({ ...formData, amount: '', to: '', note: '' });
+    setFormData({ ...formData, amount: '', to: '', note: '', paymentMethod: 'GENERAL' });
 
     // Actual Google Sheet Sync
     if (googleSheetUrl) {
@@ -266,15 +273,21 @@ const App: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">To (Type Name)</label>
-                  <input 
-                    type="text"
-                    required
-                    placeholder="Enter recipient name..."
-                    value={formData.to}
-                    onChange={(e) => setFormData({...formData, to: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-                  />
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">To (Party)</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      list="parties-list"
+                      required
+                      placeholder="Select or type recipient..."
+                      value={formData.to}
+                      onChange={(e) => setFormData({...formData, to: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                    />
+                    <datalist id="parties-list">
+                      {parties.map(p => <option key={p.id} value={p.name} />)}
+                    </datalist>
+                  </div>
                 </div>
               </div>
 
@@ -296,18 +309,31 @@ const App: React.FC = () => {
               <div className="flex bg-slate-100 p-1 rounded-xl">
                 <button 
                   type="button"
-                  onClick={() => setFormData({...formData, type: 'GIVE'})}
-                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'GIVE' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => setFormData({...formData, type: 'CREDIT'})}
+                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'CREDIT' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  Give (-)
+                  Credit (+)
                 </button>
                 <button 
                   type="button"
-                  onClick={() => setFormData({...formData, type: 'TAKE'})}
-                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'TAKE' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => setFormData({...formData, type: 'DEBIT'})}
+                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'DEBIT' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  Take (+)
+                  Debit (-)
                 </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Payment Method</label>
+                <select 
+                  value={formData.paymentMethod}
+                  onChange={(e) => setFormData({...formData, paymentMethod: e.target.value as PaymentMethod})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                >
+                  <option value="GENERAL">General</option>
+                  <option value="CASH">Cash</option>
+                  <option value="BANK">Bank</option>
+                </select>
               </div>
 
               <div>
@@ -473,17 +499,22 @@ const App: React.FC = () => {
                           {tx.note && <p className="text-[11px] text-slate-500 mt-1 italic font-medium">"{tx.note}"</p>}
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${
-                            tx.type === 'GIVE' 
-                              ? 'bg-blue-100 text-blue-700' 
-                              : 'bg-purple-100 text-purple-700'
-                          }`}>
-                            {tx.type === 'GIVE' ? 'Give Out' : 'Take In'}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter w-fit ${
+                              tx.type === 'CREDIT' 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {tx.type === 'CREDIT' ? 'Credit (+)' : 'Debit (-)'}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1">
+                              {tx.paymentMethod}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap">
-                          <div className={`text-base font-black ${tx.type === 'GIVE' ? 'text-blue-600' : 'text-purple-600'}`}>
-                            {tx.type === 'GIVE' ? '-' : '+'}₹{tx.amount.toLocaleString('en-IN')}
+                          <div className={`text-base font-black ${tx.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {tx.type === 'CREDIT' ? '+' : '-'}₹{tx.amount.toLocaleString('en-IN')}
                           </div>
                         </td>
                         <td className="px-6 py-5 text-right whitespace-nowrap">
