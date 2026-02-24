@@ -57,7 +57,46 @@ const App: React.FC = () => {
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
+  // Fetch from Sheet
+  const fetchFromSheet = React.useCallback(async (urlOverride?: string) => {
+    const url = urlOverride || googleSheetUrl;
+    if (!url) return;
+
+    setIsFetching(true);
+    try {
+      // Add cache-busting parameter
+      const fetchUrl = new URL(url);
+      fetchUrl.searchParams.set('_t', Date.now().toString());
+
+      const response = await fetch(fetchUrl.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        // Ensure every transaction has an ID and valid date
+        const processed = data.map((tx, idx) => ({
+          ...tx,
+          id: tx.id || `sheet-${idx}-${Date.now()}`,
+          amount: parseFloat(tx.amount) || 0,
+          date: tx.date || new Date().toISOString()
+        }));
+        const sorted = processed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setTransactions(sorted);
+        setLastUpdated(new Date());
+      } else {
+        console.warn("Received non-array data from sheet:", data);
+      }
+    } catch (error) {
+      console.error("Fetch Error:", error);
+    } finally {
+      setIsFetching(false);
+    }
+  }, [googleSheetUrl]);
+
   // Filters
   const [filterName, setFilterName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -88,53 +127,16 @@ const App: React.FC = () => {
       }
     };
     fetchConfig();
-  }, []);
+  }, [fetchFromSheet]);
 
-  // Auto-refresh every 60 seconds
+  // Auto-refresh every 20 seconds
   useEffect(() => {
     if (!googleSheetUrl) return;
     const interval = setInterval(() => {
       fetchFromSheet();
-    }, 60000);
+    }, 20000);
     return () => clearInterval(interval);
-  }, [googleSheetUrl]);
-
-  // Fetch from Sheet
-  const fetchFromSheet = async (urlOverride?: string) => {
-    const url = urlOverride || googleSheetUrl;
-    if (!url) return;
-
-    setIsFetching(true);
-    try {
-      // Add cache-busting parameter
-      const fetchUrl = new URL(url);
-      fetchUrl.searchParams.set('_t', Date.now().toString());
-
-      const response = await fetch(fetchUrl.toString(), {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        // Ensure every transaction has an ID and valid date
-        const processed = data.map((tx, idx) => ({
-          ...tx,
-          id: tx.id || `sheet-${idx}-${Date.now()}`,
-          amount: parseFloat(tx.amount) || 0,
-          date: tx.date || new Date().toISOString()
-        }));
-        const sorted = processed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setTransactions(sorted);
-      } else {
-        console.warn("Received non-array data from sheet:", data);
-      }
-    } catch (error) {
-      console.error("Fetch Error:", error);
-    } finally {
-      setIsFetching(false);
-    }
-  };
+  }, [googleSheetUrl, fetchFromSheet]);
 
   // Initial Fetch - Removed as it's now handled by fetchConfig
 
@@ -307,6 +309,11 @@ const App: React.FC = () => {
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">CashFlow Pro</h1>
           </div>
           <div className="flex items-center space-x-3">
+            {lastUpdated && (
+              <span className="text-[9px] text-slate-400 font-medium hidden sm:inline">
+                Updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
             {syncStatus === 'success' && <span className="text-xs text-emerald-600 flex items-center font-medium"><CheckCircleIcon className="h-4 w-4 mr-1"/> Synced</span>}
             {syncStatus === 'error' && <span className="text-xs text-rose-600 flex items-center font-medium"><ExclamationCircleIcon className="h-4 w-4 mr-1"/> Sync Failed</span>}
             <button 
