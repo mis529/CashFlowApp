@@ -106,7 +106,11 @@ const App: React.FC = () => {
 
     setIsFetching(true);
     try {
-      const response = await fetch(url, {
+      // Add cache-busting parameter
+      const fetchUrl = new URL(url);
+      fetchUrl.searchParams.set('_t', Date.now().toString());
+
+      const response = await fetch(fetchUrl.toString(), {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
@@ -316,10 +320,13 @@ const App: React.FC = () => {
             <button 
               onClick={() => fetchFromSheet()}
               disabled={isFetching || !googleSheetUrl}
-              className={`p-2 rounded-full transition ${isFetching ? 'animate-spin text-amber-500' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+              className={`p-2 rounded-full transition relative ${isFetching ? 'text-amber-500' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
               title="Refresh from Sheet"
             >
-              <ArrowPathIcon className="h-5 w-5" />
+              <ArrowPathIcon className={`h-5 w-5 ${isFetching ? 'animate-spin' : ''}`} />
+              {!isFetching && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse opacity-50"></span>
+              )}
             </button>
             <button 
               onClick={generateAIInsights}

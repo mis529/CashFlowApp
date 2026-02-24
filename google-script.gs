@@ -22,15 +22,16 @@
  * 8. Copy the Web App URL and ensure it matches the one in your app config.
  */
 
-const SHEET_NAME = "Sheet1"; // Ensure your sheet tab is named "Sheet1" or update this
+const SHEET_NAME = "Sheet1"; // Default sheet name
 
 function doPost(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_NAME);
     
+    // If Sheet1 doesn't exist, use the first sheet
     if (!sheet) {
-      sheet = ss.insertSheet(SHEET_NAME);
+      sheet = ss.getSheets()[0];
     }
 
     const contents = e.postData.contents;
@@ -65,7 +66,20 @@ function doPost(e) {
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+    // Try to find a sheet with data
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet || sheet.getLastRow() <= 1) {
+      const allSheets = ss.getSheets();
+      for (let i = 0; i < allSheets.length; i++) {
+        if (allSheets[i].getLastRow() > 1) {
+          sheet = allSheets[i];
+          break;
+        }
+      }
+    }
+    
+    if (!sheet) sheet = ss.getSheets()[0];
+    
     const rows = sheet.getDataRange().getValues();
     
     if (rows.length <= 1) {
@@ -77,10 +91,18 @@ function doGet(e) {
     const transactions = rows.slice(1).map(row => {
       const obj = {};
       headers.forEach((header, index) => {
-        let key = header.toString().trim();
-        // Normalize keys to camelCase
-        if (key.toLowerCase() === "paymentmethod") key = "paymentMethod";
-        else key = key.charAt(0).toLowerCase() + key.slice(1);
+        let rawKey = header.toString().trim().toLowerCase();
+        let key = rawKey;
+        
+        // Map common variations to the keys used in the React app
+        if (rawKey === "paymentmethod" || rawKey === "payment method") key = "paymentMethod";
+        else if (rawKey === "date") key = "date";
+        else if (rawKey === "from") key = "from";
+        else if (rawKey === "to") key = "to";
+        else if (rawKey === "type") key = "type";
+        else if (rawKey === "amount") key = "amount";
+        else if (rawKey === "note") key = "note";
+        else if (rawKey === "id") key = "id";
         
         let value = row[index];
         if (key === 'date' && value instanceof Date) {
@@ -91,7 +113,7 @@ function doGet(e) {
       return obj;
     });
 
-    // Return JSON with CORS support via ContentService
+    // Return JSON with headers to discourage caching
     return ContentService.createTextOutput(JSON.stringify(transactions))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
