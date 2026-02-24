@@ -55,7 +55,8 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
+  // HARDCODED GOOGLE SHEET URL - PASTE YOUR URL BELOW
+  const [googleSheetUrl, setGoogleSheetUrl] = useState('https://script.google.com/macros/s/AKfycbzG87SP4QaameeFB-8VrMG8JtKWoE6LjnYXgxj1O211EPEMN1pmwzDR2Qsz0-AgDjcl/exec');
   const [isFetching, setIsFetching] = useState(false);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -144,7 +145,6 @@ const App: React.FC = () => {
         if (data.gsheetUrl) {
           const trimmedUrl = data.gsheetUrl.trim();
           setGoogleSheetUrl(trimmedUrl);
-          // Initial fetch will be triggered by the googleSheetUrl useEffect
         }
       } catch (error) {
         console.error("Config Fetch Error:", error);
@@ -514,32 +514,6 @@ const App: React.FC = () => {
                   {p.name}
                 </span>
               ))}
-            </div>
-          </section>
-
-          {/* Connection Info */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
-              <LinkIcon className="h-4 w-4 mr-2" />
-              Sync Status
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Google Sheet</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${googleSheetUrl ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                  {googleSheetUrl ? 'Connected' : 'Missing URL'}
-                </span>
-              </div>
-              {googleSheetUrl && (
-                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <p className="text-[9px] text-slate-400 font-mono break-all line-clamp-2">
-                    {googleSheetUrl}
-                  </p>
-                </div>
-              )}
-              <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                Tip: If data isn't posting, ensure your Google Script is deployed as a "Web App" with access set to "Anyone".
-              </p>
             </div>
           </section>
         </div>
