@@ -57,6 +57,11 @@ const App: React.FC = () => {
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  
+  // Filters
+  const [filterName, setFilterName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Check API Key
   useEffect(() => {
@@ -84,6 +89,15 @@ const App: React.FC = () => {
     };
     fetchConfig();
   }, []);
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    if (!googleSheetUrl) return;
+    const interval = setInterval(() => {
+      fetchFromSheet();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [googleSheetUrl]);
 
   // Fetch from Sheet
   const fetchFromSheet = async (urlOverride?: string) => {
@@ -152,6 +166,51 @@ const App: React.FC = () => {
 
     return Object.entries(stats).map(([name, balance]) => ({ name, balance }));
   }, [transactions, parties]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      const matchesName = !filterName || 
+        tx.from.toLowerCase().includes(filterName.toLowerCase()) || 
+        tx.to.toLowerCase().includes(filterName.toLowerCase());
+      
+      const txDate = new Date(tx.date).getTime();
+      const start = startDate ? new Date(startDate).getTime() : 0;
+      const end = endDate ? new Date(endDate).getTime() + 86400000 : Infinity; // +1 day to include end date
+      
+      const matchesDate = txDate >= start && txDate <= end;
+      
+      return matchesName && matchesDate;
+    });
+  }, [transactions, filterName, startDate, endDate]);
+
+  const downloadCSV = () => {
+    if (filteredTransactions.length === 0) return;
+    
+    const headers = ["Date", "From", "To", "Type", "Amount", "PaymentMethod", "Note"];
+    const rows = filteredTransactions.map(tx => [
+      new Date(tx.date).toLocaleString(),
+      tx.from,
+      tx.to,
+      tx.type,
+      tx.amount,
+      tx.paymentMethod,
+      tx.note
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(val => `"${val}"`).join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `cashflow_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleAddParty = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,6 +305,14 @@ const App: React.FC = () => {
           <div className="flex items-center space-x-3">
             {syncStatus === 'success' && <span className="text-xs text-emerald-600 flex items-center font-medium"><CheckCircleIcon className="h-4 w-4 mr-1"/> Synced</span>}
             {syncStatus === 'error' && <span className="text-xs text-rose-600 flex items-center font-medium"><ExclamationCircleIcon className="h-4 w-4 mr-1"/> Sync Failed</span>}
+            <button 
+              onClick={downloadCSV}
+              disabled={filteredTransactions.length === 0}
+              className="p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-indigo-600 transition"
+              title="Download CSV"
+            >
+              <DocumentArrowDownIcon className="h-5 w-5" />
+            </button>
             <button 
               onClick={() => fetchFromSheet()}
               disabled={isFetching || !googleSheetUrl}
@@ -464,14 +531,51 @@ const App: React.FC = () => {
 
           {/* Ledger History */}
           <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Transaction History</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Showing all recorded cash movements</p>
+            <div className="px-6 py-5 border-b border-slate-100 bg-white">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Transaction History</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Showing all recorded cash movements</p>
+                </div>
+                <span className="text-[10px] font-black bg-indigo-50 px-3 py-1.5 rounded-full text-indigo-600 uppercase tracking-widest">
+                  {filteredTransactions.length} Logs
+                </span>
               </div>
-              <span className="text-[10px] font-black bg-indigo-50 px-3 py-1.5 rounded-full text-indigo-600 uppercase tracking-widest">
-                {transactions.length} Logs
-              </span>
+
+              {/* Filters UI */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Filter by Name</label>
+                  <select 
+                    value={filterName}
+                    onChange={(e) => setFilterName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  >
+                    <option value="">All Parties</option>
+                    {parties.map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                  <input 
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                  <input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  />
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -485,18 +589,18 @@ const App: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {transactions.length === 0 ? (
+                  {filteredTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-20 text-center">
                         <div className="max-w-xs mx-auto text-slate-300">
                           <ArrowsRightLeftIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                          <p className="font-bold text-slate-400">Empty Ledger</p>
-                          <p className="text-xs mt-1">Start by recording a payment from Abhishek or Abhinav.</p>
+                          <p className="font-bold text-slate-400">No Results</p>
+                          <p className="text-xs mt-1">Try adjusting your filters or adding a transaction.</p>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    transactions.map((tx, idx) => (
+                    filteredTransactions.map((tx, idx) => (
                       <tr key={tx.id || `tx-${idx}`} className="hover:bg-slate-50/80 transition group">
                         <td className="px-6 py-5 whitespace-nowrap">
                           <div className="text-sm font-bold text-slate-700">
