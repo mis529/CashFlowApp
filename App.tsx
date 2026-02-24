@@ -162,9 +162,39 @@ const App: React.FC = () => {
 
     const interval = setInterval(() => {
       fetchFromSheet();
-    }, 20000);
+    }, 10000); // Refresh every 10 seconds for better multi-device sync
     return () => clearInterval(interval);
   }, [googleSheetUrl, fetchFromSheet]);
+
+  // Sync parties with transactions to ensure cross-device consistency
+  useEffect(() => {
+    if (transactions.length === 0) return;
+    
+    const namesInTransactions = new Set<string>();
+    transactions.forEach(tx => {
+      if (tx.from) namesInTransactions.add(tx.from.trim());
+      if (tx.to) namesInTransactions.add(tx.to.trim());
+    });
+
+    setParties(prev => {
+      const existingNames = new Set(prev.map(p => p.name.toLowerCase().trim()));
+      const newParties = [...prev];
+      let changed = false;
+
+      namesInTransactions.forEach(name => {
+        if (name && !existingNames.has(name.toLowerCase())) {
+          newParties.push({ 
+            id: `auto-${Math.random().toString(36).substr(2, 9)}`, 
+            name 
+          });
+          existingNames.add(name.toLowerCase());
+          changed = true;
+        }
+      });
+
+      return changed ? newParties : prev;
+    });
+  }, [transactions]);
 
   // Initial Fetch - Removed as it's now handled by fetchConfig
 
@@ -301,8 +331,8 @@ const App: React.FC = () => {
         // Since no-cors gives an opaque response, we assume success if no network error
         setSyncStatus('success');
         // Wait a bit for the sheet to process before refreshing
-        setTimeout(() => fetchFromSheet(undefined, false), 2000);
-        setTimeout(() => setSyncStatus('idle'), 4000);
+        setTimeout(() => fetchFromSheet(undefined, false), 3000);
+        setTimeout(() => setSyncStatus('idle'), 5000);
       } catch (error) {
         console.error("Sync Error:", error);
         setSyncStatus('error');
