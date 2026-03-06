@@ -43,11 +43,11 @@ const App: React.FC = () => {
 
   const [newPartyName, setNewPartyName] = useState('');
   const [formData, setFormData] = useState({
-    from: 'Abhishek',
+    from: '',
     to: '', 
     amount: '',
-    type: 'CREDIT' as TransactionType,
-    paymentMethod: 'GENERAL' as PaymentMethod,
+    type: '' as any,
+    paymentMethod: '' as any,
     note: ''
   });
 
@@ -289,15 +289,39 @@ const App: React.FC = () => {
     e.preventDefault();
     const amount = parseFloat(formData.amount);
     const toName = formData.to.trim();
-    if (isNaN(amount) || amount <= 0 || !toName || formData.from === toName) return;
+    
+    if (!formData.from) {
+      alert("Please select a sender (From).");
+      return;
+    }
+    if (!formData.type) {
+      alert("Please select a transaction type (Credit/Debit).");
+      return;
+    }
+    if (!formData.paymentMethod) {
+      alert("Please select a payment method.");
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+    if (!toName) {
+      alert("Please enter a recipient (To).");
+      return;
+    }
+    if (formData.from === toName) {
+      alert("Sender and recipient cannot be the same.");
+      return;
+    }
 
     const newTx: Transaction = {
       id: Date.now().toString(),
       from: formData.from,
       to: toName,
       amount,
-      type: formData.type,
-      paymentMethod: formData.paymentMethod,
+      type: formData.type as TransactionType,
+      paymentMethod: formData.paymentMethod as PaymentMethod,
       date: new Date().toISOString(),
       note: formData.note
     };
@@ -308,7 +332,7 @@ const App: React.FC = () => {
     }
 
     setTransactions([newTx, ...transactions]);
-    setFormData({ ...formData, amount: '', to: '', note: '', paymentMethod: 'GENERAL' });
+    setFormData({ ...formData, amount: '', to: '', note: '', from: '', type: '' as any, paymentMethod: '' as any });
 
     // Actual Google Sheet Sync
     if (googleSheetUrl) {
@@ -426,9 +450,11 @@ const App: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">From (Party)</label>
                   <select 
                     value={formData.from}
+                    required
                     onChange={(e) => setFormData({...formData, from: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                   >
+                    <option value="" disabled>Select sender...</option>
                     {parties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
@@ -466,30 +492,29 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button 
-                  type="button"
-                  onClick={() => setFormData({...formData, type: 'CREDIT'})}
-                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'CREDIT' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Transaction Type</label>
+                <select 
+                  value={formData.type}
+                  required
+                  onChange={(e) => setFormData({...formData, type: e.target.value as TransactionType})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition font-bold"
                 >
-                  Credit (+)
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setFormData({...formData, type: 'DEBIT'})}
-                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'DEBIT' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Debit (-)
-                </button>
+                  <option value="" disabled>Select type...</option>
+                  <option value="CREDIT">Credit (+)</option>
+                  <option value="DEBIT">Debit (-)</option>
+                </select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Payment Method</label>
                 <select 
                   value={formData.paymentMethod}
+                  required
                   onChange={(e) => setFormData({...formData, paymentMethod: e.target.value as PaymentMethod})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                 >
+                  <option value="" disabled>Select method...</option>
                   <option value="GENERAL">General</option>
                   <option value="CASH">Cash</option>
                   <option value="BANK">Bank</option>
@@ -558,23 +583,23 @@ const App: React.FC = () => {
                 <ChartBarIcon className="h-4 w-4 mr-2" />
                 Live Balances
               </h3>
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={balances} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" fontSize={11} fontWeight="bold" axisLine={false} tickLine={false} />
-                    <YAxis fontSize={11} axisLine={false} tickLine={false} />
-                    <Tooltip 
-                      cursor={{fill: '#f8fafc'}}
-                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    />
-                    <Bar dataKey="balance" radius={[6, 6, 0, 0]}>
-                      {balances.map((entry) => (
-                        <Cell key={entry.name} fill={entry.balance >= 0 ? '#10b981' : '#f43f5e'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="h-44 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-2">
+                  {balances.length > 0 ? (
+                    balances.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-sm font-bold text-slate-700">{item.name}</span>
+                        <span className={`text-sm font-black ${item.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {item.balance >= 0 ? '+' : ''}{item.balance.toLocaleString()}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10">
+                      <p className="text-xs text-slate-400 font-medium italic">No balances to show</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 
